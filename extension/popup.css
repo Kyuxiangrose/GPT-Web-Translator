@@ -1,0 +1,167 @@
+:root {
+  color-scheme: light;
+  font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  color: #172033;
+  background: #f6f8fb;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 340px;
+  background: #f6f8fb;
+}
+
+.panel { padding: 18px; }
+
+header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.3;
+  color: #1f4d78;
+}
+
+.site {
+  margin: 4px 0 0;
+  max-width: 270px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #697386;
+  font-size: 12px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: #aab2c0;
+  box-shadow: 0 0 0 4px rgba(170, 178, 192, 0.16);
+}
+
+.dot.ready { background: #2f9e63; box-shadow: 0 0 0 4px rgba(47, 158, 99, 0.13); }
+.dot.error { background: #c24545; box-shadow: 0 0 0 4px rgba(194, 69, 69, 0.13); }
+
+section {
+  margin-bottom: 14px;
+  padding: 13px;
+  border: 1px solid #e0e5ed;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+label, .section-label {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+small {
+  display: block;
+  margin-top: 3px;
+  color: #7b8495;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.switch { position: relative; display: inline-flex; flex: none; }
+.switch input { position: absolute; opacity: 0; pointer-events: none; }
+.switch span {
+  display: block;
+  width: 42px;
+  height: 24px;
+  border-radius: 99px;
+  background: #c4cad4;
+  transition: 0.18s ease;
+}
+.switch span::after {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: 0.18s ease;
+}
+.switch input:checked + span { background: #2e74b5; }
+.switch input:checked + span::after { transform: translateX(18px); }
+.switch input:focus-visible + span { outline: 2px solid #7eb2df; outline-offset: 2px; }
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 9px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #edf1f6;
+}
+
+button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  color: #3d4657;
+  background: transparent;
+  cursor: pointer;
+}
+
+button:hover { background: rgba(255, 255, 255, 0.65); }
+button:focus-visible { outline: 2px solid #7eb2df; outline-offset: 1px; }
+.segmented button.active { color: #1f4d78; background: #fff; box-shadow: 0 1px 4px rgba(27, 42, 65, 0.12); }
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.secondary {
+  min-height: 40px;
+  border: 1px solid #d9dfe8;
+  background: #fff;
+}
+.secondary:hover { border-color: #adc2d5; background: #fafdff; }
+
+.site-rule { margin-bottom: 11px; }
+
+footer { padding: 2px 3px 0; }
+.status { margin: 0; color: #334155; font-size: 12px; line-height: 1.45; }
+.status.error { color: #b13a3a; }
+.count { margin: 3px 0 0; color: #8790a0; font-size: 11px; }
+
+button:disabled, input:disabled + span { opacity: 0.55; cursor: not-allowed; }
+
+.token-stats { padding: 10px 13px; margin-bottom: 10px; }
+.token-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 12px; line-height: 1.9; }
+.token-row strong { color: #1f4d78; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; text-align: right; }
+.token-tools { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-top: 3px; }
+.token-tools small { font-size: 10px; line-height: 1.5; }
+.token-tools button { flex: none; min-height: 24px; padding: 0; color: #697386; font-size: 11px; font-weight: 400; }
+#tokenConfirm { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e5ed; }
+#tokenConfirm p { margin: 0; color: #697386; font-size: 11px; line-height: 1.5; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 12px; }
+#confirmClearTokens { color: #b13a3a; }

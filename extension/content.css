@@ -1,0 +1,23 @@
+.gwt-bilingual {
+  display: inline-flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  max-width: 100% !important;
+  vertical-align: baseline !important;
+  white-space: normal !important;
+}
+
+.gwt-bilingual > .gwt-original {
+  display: block !important;
+}
+
+.gwt-bilingual > .gwt-translation {
+  display: block !important;
+  margin-top: 0.18em !important;
+  padding-left: 0.55em !important;
+  border-left: 2px solid rgba(46, 116, 181, 0.55) !important;
+  color: inherit !important;
+  opacity: 0.94 !important;
+  font-style: normal !important;
+  text-decoration: none !important;
+}

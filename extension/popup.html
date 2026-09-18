@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPT 网页翻译</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="panel">
+    <header>
+      <div>
+        <h1>网页翻译</h1>
+        <p id="siteName" class="site">正在读取当前页面……</p>
+      </div>
+      <span id="serviceDot" class="dot" aria-label="服务状态"></span>
+    </header>
+
+    <section class="setting-row">
+      <div>
+        <label for="autoToggle">自动翻译</label>
+        <small>打开外语网页后自动开始</small>
+      </div>
+      <label class="switch">
+        <input id="autoToggle" type="checkbox">
+        <span></span>
+      </label>
+    </section>
+
+    <section>
+      <div class="section-label">显示模式</div>
+      <div class="segmented" role="group" aria-label="显示模式">
+        <button id="modeZh" type="button">中文</button>
+        <button id="modeBilingual" type="button">双语</button>
+      </div>
+    </section>
+
+    <section class="actions">
+      <button id="stopButton" class="secondary" type="button">停止翻译</button>
+      <button id="restoreButton" class="secondary" type="button">恢复原文</button>
+    </section>
+
+    <section class="setting-row site-rule">
+      <div>
+        <label for="siteToggle">当前网站自动翻译</label>
+        <small>规则只保存在本机</small>
+      </div>
+      <label class="switch">
+        <input id="siteToggle" type="checkbox">
+        <span></span>
+      </label>
+    </section>
+
+    <section class="token-stats" aria-label="Token 统计">
+      <div class="token-row"><span>当前网页消耗 Token</span><strong id="pageTokens">—</strong></div>
+      <div class="token-row"><span>历史累计消耗 Token</span><strong id="historyTokens">—</strong></div>
+      <div class="token-row"><span>当前消耗金额</span><strong id="pageCost">—</strong></div>
+      <div class="token-row"><span>总消耗金额</span><strong id="historyCost">—</strong></div>
+      <div class="token-tools">
+        <small id="tokenNote" aria-live="polite">按 API 实际用量统计</small>
+        <button id="clearTokens" type="button">清除历史统计</button>
+      </div>
+      <div id="tokenConfirm" hidden>
+        <p>确认同时清除 Token 和金额的历史统计？当前网页统计和译文缓存会保留。</p>
+        <div class="confirm-actions">
+          <button id="cancelClearTokens" type="button">取消</button>
+          <button id="confirmClearTokens" type="button">确认清除</button>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <p id="statusText" class="status">正在连接……</p>
+      <p id="countText" class="count"></p>
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

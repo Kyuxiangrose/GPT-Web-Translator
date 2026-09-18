@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "GPT 网页翻译（DeepSeek 本机版）",
+  "version": "1.0.6",
+  "description": "通过仅监听 127.0.0.1 的本机服务，将外语网页自动翻译为简体中文或双语。",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "GPT 网页翻译",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "core.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}
