@@ -37,13 +37,39 @@
 
   function sendRuntimeMessage(message) {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage(message, (response) => {
-        if (chrome.runtime.lastError) {
-          resolve({ ok: false, error: { code: "runtime_error", message: "扩展后台暂时不可用" } });
-          return;
-        }
-        resolve(response || { ok: false, error: { code: "empty_response", message: "扩展后台没有返回结果" } });
+      let settled = false;
+      const unavailable = () => ({
+        ok: false,
+        error: { code: "runtime_error", message: "扩展后台暂时不可用，请刷新页面后重试" }
       });
+      const finish = (response) => {
+        if (settled) return;
+        settled = true;
+        resolve(response);
+      };
+      try {
+        const pending = chrome.runtime.sendMessage(message, (response) => {
+          try {
+            if (chrome.runtime.lastError) {
+              finish(unavailable());
+              return;
+            }
+            finish(response || { ok: false, error: { code: "empty_response", message: "扩展后台没有返回结果" } });
+          } catch (_error) {
+            finish(unavailable());
+          }
+        });
+        if (pending && typeof pending.then === "function") {
+          pending.then(
+            (response) => {
+              if (response !== undefined) finish(response);
+            },
+            () => finish(unavailable())
+          );
+        }
+      } catch (_error) {
+        finish(unavailable());
+      }
     });
   }
 

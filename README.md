@@ -77,6 +77,11 @@
 
 当前价格版本为 `deepseek-cn-2026-09-10`。官方依据：[DeepSeek 模型与人民币价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)、[DeepSeek Token 用量](https://api-docs.deepseek.com/quick_start/token_usage/)、[DeepSeek 余额接口](https://api-docs.deepseek.com/zh-cn/api/get-user-balance/)。
 
+## 1.0.8：扩展重载错误修复（2026-09-19）
+
+- 修复更新扩展后，旧网页脚本因扩展上下文失效而留下 `Extension context invalidated` 红色错误的问题。
+- 同时兼容消息发送时的同步异常与 Promise 拒绝；旧页面会安静提示刷新，不再产生未处理异常。
+
 ## 1.0.6：API Key 跨版本保留（2026-09-18）
 
 - API Key 改为保存在当前 Windows 用户的 `%LOCALAPPDATA%\GPT-Web-Translator\.env`。

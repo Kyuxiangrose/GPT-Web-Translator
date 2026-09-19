@@ -180,9 +180,9 @@ test("batching respects segment and character limits", async () => {
   assert.deepEqual(result, [2, 2]);
 });
 
-async function installContentScript(page, html, language) {
+async function installContentScript(page, html, language, runtimeFailure) {
   await page.setContent(html);
-  await page.evaluate((lang) => {
+  await page.evaluate(({ lang, runtimeFailure }) => {
     document.documentElement.lang = lang || "en";
     window.__translateCalls = 0;
     window.__translateSegments = [];
@@ -203,6 +203,8 @@ async function installContentScript(page, html, language) {
           addListener(listener) { window.__contentListener = listener; }
         },
         sendMessage(message, callback) {
+          if (runtimeFailure === "throw") throw new Error("Extension context invalidated.");
+          if (runtimeFailure === "reject") return Promise.reject(new Error("Extension context invalidated."));
           if (message.type === "GWT_TRANSLATE_BATCH") {
             window.__translateCalls += 1;
             window.__translatePageIds.push(message.payload.page_id);
@@ -222,10 +224,34 @@ async function installContentScript(page, html, language) {
         }
       }
     };
-  }, language);
+  }, { lang: language, runtimeFailure });
   await page.addScriptTag({ path: path.join(extensionRoot, "core.js") });
   await page.addScriptTag({ path: path.join(extensionRoot, "content.js") });
 }
+
+test("extension reload context invalidation is handled without an unhandled error", async () => {
+  for (const runtimeFailure of ["throw", "reject"]) {
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    try {
+      await installContentScript(
+        page,
+        '<main><p>A foreign paragraph remains open while the extension reloads.</p></main>',
+        "en",
+        runtimeFailure
+      );
+      await page.waitForFunction(() => window.__contentListener !== null);
+      await page.waitForTimeout(100);
+      const response = await sendContentMessage(page, { type: "GWT_GET_STATE" });
+      assert.equal(response.ok, true);
+      assert.equal(response.state.errorCode, "runtime_error");
+      assert.deepEqual(pageErrors, []);
+    } finally {
+      await page.close();
+    }
+  }
+});
 
 async function sendContentMessage(page, message) {
   return page.evaluate((value) => new Promise((resolve, reject) => {
