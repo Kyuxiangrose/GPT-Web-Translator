@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 import uuid
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from cache import TranslationCache
@@ -169,6 +170,95 @@ class DeepSeekClient:
         self.cache = cache
         self.usage_store = usage_store or TokenUsageStore(cache.database_path)
         self._semaphore = threading.BoundedSemaphore(config.max_concurrency)
+        self._balance_lock = threading.Lock()
+        self._balance_cache: dict[str, Any] | None = None
+        self._balance_cached_at = 0.0
+
+    def get_balance(self) -> dict[str, Any]:
+        """Return the official account balance without exposing the API key."""
+        if not self.config.api_key:
+            raise TranslationError(
+                "not_configured",
+                "尚未配置 DeepSeek API Key，请先运行“配置API密钥.bat”",
+                503,
+                False,
+            )
+        with self._balance_lock:
+            now = time.monotonic()
+            if self._balance_cache is not None and now - self._balance_cached_at < 60:
+                return dict(self._balance_cache)
+            request = urllib.request.Request(
+                self.config.balance_url,
+                method="GET",
+                headers={
+                    "Authorization": f"Bearer {self.config.api_key}",
+                    "Accept": "application/json",
+                    "User-Agent": "GPT-Web-Translator/1.0",
+                },
+            )
+            try:
+                with urllib.request.urlopen(
+                    request, timeout=self.config.timeout_seconds
+                ) as response:
+                    raw = response.read(256 * 1024)
+            except urllib.error.HTTPError as exc:
+                if exc.code in (401, 403):
+                    raise TranslationError(
+                        "invalid_key", "DeepSeek API Key 无效", 502, False
+                    ) from exc
+                if exc.code == 429:
+                    raise TranslationError(
+                        "rate_limited", "DeepSeek 当前请求较多，请稍后重试", 503, True
+                    ) from exc
+                raise TranslationError(
+                    "balance_unavailable", "暂时无法读取 DeepSeek 账户余额", 502, False
+                ) from exc
+            except (urllib.error.URLError, TimeoutError) as exc:
+                raise TranslationError(
+                    "balance_unavailable", "暂时无法读取 DeepSeek 账户余额", 503, True
+                ) from exc
+            try:
+                envelope = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise TranslationError(
+                    "invalid_balance_response", "DeepSeek 返回了无法识别的余额信息", 502, False
+                ) from exc
+            if not isinstance(envelope, dict) or not isinstance(
+                envelope.get("balance_infos"), list
+            ):
+                raise TranslationError(
+                    "invalid_balance_response", "DeepSeek 返回了无法识别的余额信息", 502, False
+                )
+            balances = []
+            for item in envelope["balance_infos"]:
+                if not isinstance(item, dict) or item.get("currency") not in {"CNY", "USD"}:
+                    continue
+                cleaned = {"currency": item["currency"]}
+                valid = True
+                for key in ("total_balance", "granted_balance", "topped_up_balance"):
+                    try:
+                        amount = Decimal(str(item.get(key, "")))
+                    except (InvalidOperation, ValueError):
+                        valid = False
+                        break
+                    if not amount.is_finite() or amount < 0:
+                        valid = False
+                        break
+                    cleaned[key] = format(amount, "f")
+                if valid:
+                    balances.append(cleaned)
+            if not balances:
+                raise TranslationError(
+                    "invalid_balance_response", "DeepSeek 返回了无法识别的余额信息", 502, False
+                )
+            result = {
+                "is_available": envelope.get("is_available") is True,
+                "balance_infos": balances,
+                "fetched_at": int(time.time()),
+            }
+            self._balance_cache = result
+            self._balance_cached_at = now
+            return dict(result)
 
     def _cache_key(self, request_payload: dict[str, Any]) -> str:
         material = {
@@ -311,9 +401,10 @@ class DeepSeekClient:
         # response may already have consumed tokens even when its text is unusable.
         if isinstance(envelope, dict) and not envelope.get("error"):
             try:
+                actual_model = envelope.get("model") or self.config.model
                 self.usage_store.record(
                     event_id, page_id, envelope.get("usage"),
-                    self.config.model,
+                    actual_model,
                     envelope.get("created"),
                 )
             except sqlite3.Error as exc:
@@ -343,7 +434,7 @@ class DeepSeekClient:
         validated = self._validate_model_output(parsed, protected_payload)
         validated = _restore_identity_terms(validated, token_to_term, expected_by_id)
         validated["usage"] = clean_usage(envelope.get("usage"))
-        validated["model"] = self.config.model
+        validated["model"] = envelope.get("model") or self.config.model
         return validated
 
     @staticmethod

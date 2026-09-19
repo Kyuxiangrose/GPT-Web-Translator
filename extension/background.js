@@ -89,6 +89,18 @@ async function getTokenStats(pageId, clear = false, confirmed = false) {
   }
 }
 
+async function getAccountBalance() {
+  try {
+    const payload = await fetchJson("/v1/balance", { method: "POST", body: {} });
+    if (!payload.account_balance || !Array.isArray(payload.account_balance.balance_infos)) {
+      throw new Error("请重启更新后的本机翻译服务");
+    }
+    return { ok: true, balance: payload.account_balance };
+  } catch (error) {
+    return { ok: false, error: error.message || "暂时无法读取 DeepSeek 账户余额" };
+  }
+}
+
 function addController(sessionId, controller) {
   if (!pendingBySession.has(sessionId)) pendingBySession.set(sessionId, new Set());
   pendingBySession.get(sessionId).add(controller);
@@ -186,6 +198,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     getTokenStats(message.pageId || "", message.type === "GWT_CLEAR_TOKEN_STATS", message.confirmed === true)
       .then(sendResponse)
       .catch(() => sendResponse({ ok: false, error: "无法读取 Token 统计" }));
+    return true;
+  }
+  if (message.type === "GWT_GET_ACCOUNT_BALANCE") {
+    getAccountBalance()
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false, error: "暂时无法读取 DeepSeek 账户余额" }));
     return true;
   }
   if (message.type === "GWT_TRANSLATE_BATCH") {

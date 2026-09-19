@@ -153,7 +153,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "service": "GPT-Web-Translator",
                 "configured": bool(self.app.config.api_key),
                 "model": self.app.config.model,
-                "token_stats_version": 2,
+                "token_stats_version": 3,
             },
             cors=self._origin_allowed(),
         )
@@ -176,6 +176,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                         raise TranslationError("confirmation_required", "请先确认清除历史统计", 400, False)
                     self.app.usage.clear_history()
                 self._send_json(HTTPStatus.OK, {"ok": True, "token_stats": self.app.usage.snapshot(page_id)})
+            elif self.path == "/v1/balance":
+                self._send_json(
+                    HTTPStatus.OK,
+                    {"ok": True, "account_balance": self.app.client.get_balance()},
+                )
             else:
                 self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": {"code": "not_found", "message": "接口不存在"}})
         except TranslationError as exc:

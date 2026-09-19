@@ -15,6 +15,8 @@ const elements = {
   historyTokens: document.getElementById("historyTokens"),
   pageCost: document.getElementById("pageCost"),
   historyCost: document.getElementById("historyCost"),
+  accountBalance: document.getElementById("accountBalance"),
+  balanceNote: document.getElementById("balanceNote"),
   tokenNote: document.getElementById("tokenNote"),
   clearTokens: document.getElementById("clearTokens"),
   tokenConfirm: document.getElementById("tokenConfirm"),
@@ -51,6 +53,32 @@ function renderTokenStats(response) {
     : missingCost ? "部分旧记录缺少金额明细，仅显示已知金额"
     : "Token 按 API 实际用量 · 金额按官方单价";
   elements.clearTokens.disabled = !response.ok || Boolean(response.stale) || clearingTokens;
+}
+
+function renderAccountBalance(response) {
+  if (!response.ok || !response.balance) {
+    elements.accountBalance.textContent = "—";
+    elements.balanceNote.textContent = response.error || "暂时无法读取账户余额";
+    return;
+  }
+  const infos = response.balance.balance_infos || [];
+  const preferred = infos.find((item) => item.currency === "CNY") || infos[0];
+  const value = preferred && Number(preferred.total_balance);
+  if (!preferred || !Number.isFinite(value) || value < 0) {
+    elements.accountBalance.textContent = "—";
+    elements.balanceNote.textContent = "DeepSeek 返回的余额格式异常";
+    return;
+  }
+  const symbol = preferred.currency === "CNY" ? "¥" : "$";
+  elements.accountBalance.textContent = `${symbol}${value.toFixed(2)}`;
+  elements.balanceNote.textContent = response.balance.is_available
+    ? "DeepSeek 官方当前余额 · 最多每分钟刷新一次"
+    : "DeepSeek 官方余额不足或暂不可用";
+}
+
+async function refreshAccountBalance() {
+  const response = await sendToBackground({ type: "GWT_GET_ACCOUNT_BALANCE" });
+  renderAccountBalance(response);
 }
 
 async function refreshTokenStats() {
@@ -168,7 +196,9 @@ async function initialize() {
   activeTabId = tab.id;
   // Poll only while the popup is open; no new MV3 permissions or background timer.
   refreshTokenStats();
+  refreshAccountBalance();
   setInterval(refreshTokenStats, 1500);
+  setInterval(refreshAccountBalance, 60000);
   const response = await sendToPage({ type: "GWT_GET_STATE" });
   if (!response.ok) {
     elements.siteName.textContent = "此页面不支持翻译";

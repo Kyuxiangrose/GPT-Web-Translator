@@ -54,8 +54,10 @@
     <section class="token-stats" aria-label="Token 统计">
       <div class="token-row"><span>当前网页消耗 Token</span><strong id="pageTokens">—</strong></div>
       <div class="token-row"><span>历史累计消耗 Token</span><strong id="historyTokens">—</strong></div>
-      <div class="token-row"><span>当前消耗金额</span><strong id="pageCost">—</strong></div>
-      <div class="token-row"><span>总消耗金额</span><strong id="historyCost">—</strong></div>
+      <div class="token-row"><span>当前网页实际费用</span><strong id="pageCost">—</strong></div>
+      <div class="token-row"><span>本插件累计实际费用</span><strong id="historyCost">—</strong></div>
+      <div class="token-row balance-row"><span>DeepSeek 账户余额</span><strong id="accountBalance">—</strong></div>
+      <small id="balanceNote" class="balance-note" aria-live="polite">余额独立于本插件统计</small>
       <div class="token-tools">
         <small id="tokenNote" aria-live="polite">按 API 实际用量统计</small>
         <button id="clearTokens" type="button">清除历史统计</button>

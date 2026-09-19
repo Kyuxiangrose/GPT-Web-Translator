@@ -224,11 +224,47 @@ class BackendUnitTests(unittest.TestCase):
             result = client._call_api(clean, threading.Event())
 
         self.assertEqual(captured["url"], "https://api.deepseek.com/chat/completions")
-        self.assertEqual(captured["body"]["model"], "deepseek-v4-flash")
+        self.assertEqual(captured["body"]["model"], "deepseek-flash")
         self.assertEqual(captured["body"]["thinking"], {"type": "disabled"})
         self.assertEqual(captured["body"]["response_format"], {"type": "json_object"})
         self.assertEqual(captured["authorization"], "Bearer unit-test")
         self.assertEqual(result["translations"][1]["text"], "了解更多 DeepSeek 信息")
+
+    def test_official_balance_is_validated_and_cached(self):
+        client = DeepSeekClient(self.config, self.cache)
+        captured = {"calls": 0}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return json.dumps({
+                    "is_available": True,
+                    "balance_infos": [{
+                        "currency": "CNY", "total_balance": "12.34",
+                        "granted_balance": "2.34", "topped_up_balance": "10.00",
+                    }],
+                }).encode("utf-8")
+
+        def fake_urlopen(request, timeout):
+            captured["calls"] += 1
+            captured["url"] = request.full_url
+            captured["authorization"] = request.get_header("Authorization")
+            return FakeResponse()
+
+        with patch("deepseek_client.urllib.request.urlopen", fake_urlopen):
+            first = client.get_balance()
+            second = client.get_balance()
+
+        self.assertEqual(captured["calls"], 1)
+        self.assertEqual(captured["url"], "https://api.deepseek.com/user/balance")
+        self.assertEqual(captured["authorization"], "Bearer unit-test")
+        self.assertEqual(first["balance_infos"][0]["total_balance"], "12.34")
+        self.assertEqual(first, second)
 
 
 class BackendHTTPTests(unittest.TestCase):
@@ -342,6 +378,20 @@ class BackendHTTPTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.request("/v1/usage", {"page_id": ["bad"]})
         self.assertEqual(caught.exception.code, 400)
+
+    def test_balance_endpoint_returns_official_balance_without_key(self):
+        self.client.get_balance = lambda: {
+            "is_available": True,
+            "balance_infos": [{
+                "currency": "CNY", "total_balance": "8.88",
+                "granted_balance": "0.00", "topped_up_balance": "8.88",
+            }],
+            "fetched_at": 1789747200,
+        }
+        status, payload, _ = self.request("/v1/balance", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["account_balance"]["balance_infos"][0]["total_balance"], "8.88")
+        self.assertNotIn("api_key", json.dumps(payload).lower())
 
 
 if __name__ == "__main__":

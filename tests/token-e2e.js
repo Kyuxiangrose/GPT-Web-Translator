@@ -94,14 +94,15 @@ async function main() {
   assert.equal((await stats(one.pageId)).page_total_tokens, 341);
   assert.equal((await stats(two.pageId)).page_total_tokens, 101);
   assert.equal((await stats()).history_total_tokens, 442);
-  assert.equal((await stats(one.pageId)).page_total_cost_nano_yuan, 547500);
-  assert.equal((await stats(two.pageId)).page_total_cost_nano_yuan, 125500);
-  assert.equal((await stats()).history_total_cost_nano_yuan, 673000);
+  assert.equal((await stats(one.pageId)).page_total_cost_nano_yuan, 405200);
+  assert.equal((await stats(two.pageId)).page_total_cost_nano_yuan, 84400);
+  assert.equal((await stats()).history_total_cost_nano_yuan, 489600);
   const popup = await popupFor(one);
   await popup.waitForFunction(() => document.getElementById("historyTokens").textContent === "442");
   assert.equal(await popup.locator("#pageTokens").textContent(), "341");
-  assert.equal(await popup.locator("#pageCost").textContent(), "¥0.000548");
-  assert.equal(await popup.locator("#historyCost").textContent(), "¥0.000673");
+  assert.equal(await popup.locator("#pageCost").textContent(), "¥0.000405");
+  assert.equal(await popup.locator("#historyCost").textContent(), "¥0.000490");
+  await popup.waitForFunction(() => document.getElementById("accountBalance").textContent === "¥88.88");
   await popup.locator("#modeBilingual").click();
   await popup.locator("#modeZh").click();
   assert.equal((await stats()).history_total_tokens, 442);
@@ -111,7 +112,7 @@ async function main() {
   assert.equal((await stats()).history_total_tokens, 442);
   await popup.locator("#cancelClearTokens").click();
   assert.equal((await stats()).history_total_tokens, 442);
-  assert.equal((await stats()).history_total_cost_nano_yuan, 673000);
+  assert.equal((await stats()).history_total_cost_nano_yuan, 489600);
   await popup.setViewportSize({ width: 340, height: 720 });
   await popup.screenshot({ path: path.join(process.env.GWT_TEST_WORK, "token-popup-preview.png") });
   assert.equal(await popup.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -130,7 +131,7 @@ async function main() {
   await secondPopup.locator("#confirmClearTokens").click();
   await secondPopup.waitForFunction(() => document.getElementById("historyTokens").textContent === "0");
   assert.equal((await stats(two.pageId)).page_total_tokens, 101);
-  assert.equal((await stats(two.pageId)).page_total_cost_nano_yuan, 125500);
+  assert.equal((await stats(two.pageId)).page_total_cost_nano_yuan, 84400);
   assert.equal((await stats()).history_total_cost_nano_yuan, 0);
   await second.evaluate(() => {
     const p = document.createElement("p");
@@ -140,8 +141,8 @@ async function main() {
   await waitTranslated(second);
   assert.equal((await stats()).history_total_tokens, 101);
   assert.equal((await stats(two.pageId)).page_total_tokens, 202);
-  assert.equal((await stats()).history_total_cost_nano_yuan, 125500);
-  assert.equal((await stats(two.pageId)).page_total_cost_nano_yuan, 251000);
+  assert.equal((await stats()).history_total_cost_nano_yuan, 84400);
+  assert.equal((await stats(two.pageId)).page_total_cost_nano_yuan, 168800);
   await secondPopup.waitForFunction(() => document.getElementById("historyTokens").textContent === "101");
   await stopBackend();
   await secondPopup.waitForFunction(() => document.getElementById("tokenNote").textContent.includes("离线"));
@@ -153,10 +154,10 @@ async function main() {
   await worker.evaluate(port => { globalThis.PORT = port; }, port);
   assert.equal((await stats()).history_total_tokens, 101);
   assert.equal((await stats(two.pageId)).page_total_tokens, 202);
-  assert.equal((await stats()).history_total_cost_nano_yuan, 125500);
+  assert.equal((await stats()).history_total_cost_nano_yuan, 84400);
   console.log(JSON.stringify({ passed: true, checks: [
     "real MV3 extension and Python backend", "three batches + second tab = 442 tokens",
-    "popup Token and CNY display and mode reuse", "one cancel/confirm clear for both histories", "reload and cache cost zero",
+    "popup actual CNY cost, official balance, and mode reuse", "one cancel/confirm clear for both histories", "reload and cache cost zero",
     "new dynamic request after clear", "offline mirror", "browser and backend restart persistence"
   ], runRoot }, null, 2));
 }

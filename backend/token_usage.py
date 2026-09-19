@@ -6,23 +6,23 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 
 MAX_SAFE_INTEGER = 9007199254740991
-PRICING_VERSION = "deepseek-cn-2026-08-17"
+PRICING_VERSION = "deepseek-cn-2026-09-10"
 # Integer nano-yuan per token. Official prices are CNY per 1M tokens.
 OFF_PEAK_NANO_PER_TOKEN = {
-    "deepseek-v4-flash": (50, 1500, 4500),
+    "deepseek-flash": (20, 1000, 4000),
     "deepseek-v4-pro": (150, 4500, 13500),
-    "deepseek-v4-flash-vision-exp": (50, 1500, 4500),
 }
 MODEL_ALIASES = {
-    "deepseek-flash": "deepseek-v4-flash",
+    "deepseek-v4-flash": "deepseek-flash",
+    "deepseek-v4-flash-vision-exp": "deepseek-flash",
     "deepseek-pro": "deepseek-v4-pro",
-    "deepseek-v4-flash-0731": "deepseek-v4-flash",
+    "deepseek-v4-flash-0731": "deepseek-flash",
     "deepseek-v4-pro-0813": "deepseek-v4-pro",
 }
 _SCHEMA_LOCK = threading.Lock()
@@ -65,11 +65,13 @@ def calculate_cost_nano_yuan(
         return None, None
     created = created_value if type(created_value) in (int, float) else time.time()
     try:
-        utc_hour = datetime.fromtimestamp(created, timezone.utc).hour
+        beijing_time = datetime.fromtimestamp(created, timezone.utc) + timedelta(hours=8)
     except (OverflowError, OSError, ValueError):
-        utc_hour = datetime.now(timezone.utc).hour
-    # Beijing peak windows 09:00-12:00 and 14:00-18:00.
-    peak = 1 <= utc_hour < 4 or 6 <= utc_hour < 10
+        beijing_time = datetime.now(timezone.utc) + timedelta(hours=8)
+    # Beijing peak windows on weekdays: 09:00-12:00 and 14:00-18:00.
+    peak = beijing_time.weekday() < 5 and (
+        9 <= beijing_time.hour < 12 or 14 <= beijing_time.hour < 18
+    )
     multiplier = 2 if peak else 1
     hit_price, miss_price, output_price = prices
     amount = multiplier * (
@@ -140,7 +142,8 @@ class TokenUsageStore:
                     prompt_cache_hit_tokens INTEGER,
                     prompt_cache_miss_tokens INTEGER,
                     completion_tokens INTEGER,
-                    recorded_at INTEGER NOT NULL)""")
+                    recorded_at INTEGER NOT NULL,
+                    in_history INTEGER NOT NULL DEFAULT 1)""")
                 # Migrate the 1.0.3 ledger without guessing money from total_tokens.
                 old_events = "cost_nano_yuan" not in self._columns(db, "token_events")
                 for table in ("token_history", "token_pages"):
@@ -152,40 +155,41 @@ class TokenUsageStore:
                     "prompt_cache_miss_tokens INTEGER", "completion_tokens INTEGER",
                 ):
                     self._add_column(db, "token_events", declaration)
+                added_history_flag = self._add_column(
+                    db, "token_events", "in_history INTEGER NOT NULL DEFAULT 1"
+                )
                 db.execute(
                     "INSERT OR IGNORE INTO token_history(singleton, store_id, started_at) VALUES (1, ?, ?)",
                     (uuid.uuid4().hex, int(time.time())),
                 )
-                if old_events:
+                if added_history_flag:
                     db.execute(
-                        "UPDATE token_history SET missing_cost = "
-                        "(SELECT COUNT(*) FROM token_events)"
+                        """UPDATE token_events SET in_history = CASE
+                            WHEN recorded_at >= (
+                                SELECT started_at FROM token_history WHERE singleton = 1
+                            ) THEN 1 ELSE 0 END"""
                     )
-                    db.execute(
-                        "UPDATE token_pages SET missing_cost = "
-                        "(SELECT COUNT(*) FROM token_events WHERE token_events.page_id = token_pages.page_id)"
-                    )
-                self._backfill_known_costs(db)
+                self._reprice_known_costs(db, force=old_events)
             _INITIALIZED_DATABASES.add(database_key)
             self._initialized = True
 
-    def _backfill_known_costs(self, db: sqlite3.Connection) -> None:
-        """Repair saved 1.0.4 events whose API response used a known model alias."""
-        started_row = db.execute(
-            "SELECT started_at FROM token_history WHERE singleton = 1"
-        ).fetchone()
-        started_at = int(started_row[0]) if started_row else 0
+    def _reprice_known_costs(self, db: sqlite3.Connection, force: bool = False) -> None:
+        """Recalculate saved receipts when the official tariff table changes."""
         rows = db.execute(
-            """SELECT event_id, page_id, total_tokens, model,
+            """SELECT event_id, page_id, total_tokens, cost_nano_yuan,
+                pricing_version, model,
                 prompt_cache_hit_tokens, prompt_cache_miss_tokens,
                 completion_tokens, recorded_at
                 FROM token_events
-                WHERE cost_nano_yuan IS NULL
-                  AND prompt_cache_hit_tokens IS NOT NULL
+                WHERE prompt_cache_hit_tokens IS NOT NULL
                   AND prompt_cache_miss_tokens IS NOT NULL
                   AND completion_tokens IS NOT NULL"""
         ).fetchall()
-        for event_id, page_id, total, model, hit, miss, completion, recorded_at in rows:
+        changed = 0
+        for (
+            event_id, _page_id, total, saved_cost, saved_version, model,
+            hit, miss, completion, recorded_at,
+        ) in rows:
             usage = {
                 "prompt_tokens": hit + miss,
                 "completion_tokens": completion,
@@ -198,30 +202,41 @@ class TokenUsageStore:
             )
             if cost is None:
                 continue
-            changed = db.execute(
+            if saved_cost == cost and saved_version == pricing_version:
+                continue
+            changed += db.execute(
                 """UPDATE token_events
                     SET cost_nano_yuan = ?, pricing_version = ?
-                    WHERE event_id = ? AND cost_nano_yuan IS NULL""",
+                    WHERE event_id = ?""",
                 (cost, pricing_version, event_id),
             ).rowcount
-            if not changed:
-                continue
-            db.execute(
-                """UPDATE token_pages SET
-                    total_cost_nano_yuan = total_cost_nano_yuan + ?,
-                    missing_cost = CASE WHEN missing_cost > 0 THEN missing_cost - 1 ELSE 0 END
-                    WHERE page_id = ?""",
-                (cost, page_id),
-            )
-            if recorded_at >= started_at:
-                db.execute(
-                    """UPDATE token_history SET
-                        total_cost_nano_yuan = total_cost_nano_yuan + ?,
-                        missing_cost = CASE WHEN missing_cost > 0 THEN missing_cost - 1 ELSE 0 END,
-                        revision = revision + 1
-                        WHERE singleton = 1""",
-                    (cost,),
-                )
+        if not changed and not force:
+            return
+        db.execute(
+            """UPDATE token_pages SET
+                total_cost_nano_yuan = COALESCE((
+                    SELECT SUM(cost_nano_yuan) FROM token_events
+                    WHERE token_events.page_id = token_pages.page_id
+                ), 0),
+                missing_cost = (
+                    SELECT COUNT(*) FROM token_events
+                    WHERE token_events.page_id = token_pages.page_id
+                      AND token_events.cost_nano_yuan IS NULL
+                )"""
+        )
+        db.execute(
+            """UPDATE token_history SET
+                total_cost_nano_yuan = COALESCE((
+                    SELECT SUM(cost_nano_yuan) FROM token_events
+                    WHERE in_history = 1
+                ), 0),
+                missing_cost = (
+                    SELECT COUNT(*) FROM token_events
+                    WHERE in_history = 1 AND cost_nano_yuan IS NULL
+                ),
+                revision = revision + 1
+                WHERE singleton = 1""",
+        )
 
     def record(
         self, event_id: str, page_id: str, usage_value: Any,
@@ -236,6 +251,13 @@ class TokenUsageStore:
             usage_value, model_value, created_value
         )
         missing_cost = int(cost is None)
+        recorded_at = int(time.time())
+        if type(created_value) in (int, float):
+            try:
+                datetime.fromtimestamp(created_value, timezone.utc)
+                recorded_at = int(created_value)
+            except (OverflowError, OSError, ValueError):
+                pass
         with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
             added = db.execute(
@@ -249,7 +271,7 @@ class TokenUsageStore:
                     str(model_value or "")[:100],
                     usage.get("prompt_cache_hit_tokens"),
                     usage.get("prompt_cache_miss_tokens"),
-                    usage.get("completion_tokens"), int(time.time()),
+                    usage.get("completion_tokens"), recorded_at,
                 ),
             ).rowcount
             if not added:
@@ -309,6 +331,7 @@ class TokenUsageStore:
     def clear_history(self) -> None:
         self.initialize()
         with self._connection() as db:
+            db.execute("UPDATE token_events SET in_history = 0 WHERE in_history = 1")
             db.execute(
                 """UPDATE token_history SET
                     total_tokens = 0, missing_usage = 0,

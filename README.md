@@ -10,7 +10,7 @@
 - 中文 / 双语两种显示模式，切换时只复用已有译文。
 - 停止翻译与恢复原文分离。
 - 当前网站自动翻译规则保存在浏览器本机。
-- 弹窗显示当前网页 Token 和历史累计 Token，按 DeepSeek 成功响应的真实 usage.total_tokens 统计；历史清除需二次确认。
+- 弹窗显示当前网页和本插件累计的真实 Token、按官方单价计算的实际费用，以及独立读取的 DeepSeek 账户当前余额；历史清除需二次确认。
 - 支持 SPA、无限滚动和动态新增内容。
 - 跳过输入框、编辑区、密码、代码、隐藏内容和技术结构。
 - 只改可见文本，不改链接 `href`、查询参数或锚点。
@@ -38,7 +38,7 @@
 
 - Base URL：`https://api.deepseek.com`
 - 接口：`POST /chat/completions`
-- 默认模型：`deepseek-v4-flash`
+- 默认模型：`deepseek-flash`（DeepSeek-V4.1-Flash）
 - 输出：JSON Output
 - 翻译模式：非思考模式
 
@@ -63,7 +63,19 @@
 
 真实 DeepSeek 请求需要用户本人的 Key 和余额；自动化测试使用本地桩实现，不产生 API 费用。
 
-本交付版本已通过：后端 15 项测试、扩展 12 项 DOM/行为测试（包含 GitHub 中文化插件兼容性，以及 X/YouTube/通用作者身份保护与占位符回归测试）、真实 DeepSeek 身份保留验证、Microsoft Edge 真实加载扩展的端到端冒烟测试，以及独立 Windows EXE 的实际启动与健康检查。另已检查 Manifest V3、最小权限、API Key 泄漏、Windows cmd CRLF/PowerShell 5.1 编码兼容性和打包内容。
+本交付版本已通过：后端 44 项测试、扩展 21 项 DOM/行为与后台统计测试、Microsoft Edge 真实加载扩展的端到端测试，以及独立 Windows EXE 的实际启动与健康检查。另已检查 Manifest V3、最小权限、API Key 泄漏、Windows cmd CRLF/PowerShell 5.1 编码兼容性和打包内容。
+
+## 1.0.7：实际用量计费与官方余额（2026-09-19）
+
+- 默认模型更新为官方当前名称 `deepseek-flash`；旧配置中的 `deepseek-v4-flash` 会自动转换，无需重新输入 API Key。
+- 每次成功响应继续以 DeepSeek 返回的缓存命中、缓存未命中和输出 Token 为真实用量来源，不按字符数估算。
+- 当前 Flash 人民币单价更新为：空闲时段每百万 Token 分别为 ¥0.02、¥1.00、¥4.00；高峰时段分别为 ¥0.04、¥2.00、¥8.00。
+- 对分类完整的旧记录执行一次价格重算，修正 1.0.6 使用旧价目表造成的金额偏差；缺少分类字段的旧记录仍不猜测金额。
+- 弹窗新增 DeepSeek 官方账户余额。余额通过 `/user/balance` 读取、最多每分钟刷新一次，与本插件累计费用分开显示。
+- API Key 仍只由本机后端使用，扩展只能收到余额数字，不能读取 Key。
+- 已通过 44 项后端测试、21 项扩展测试和隔离的真实 MV3 浏览器端到端测试；测试使用本地模拟响应，不消耗真实 API 余额。
+
+当前价格版本为 `deepseek-cn-2026-09-10`。官方依据：[DeepSeek 模型与人民币价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)、[DeepSeek Token 用量](https://api-docs.deepseek.com/quick_start/token_usage/)、[DeepSeek 余额接口](https://api-docs.deepseek.com/zh-cn/api/get-user-balance/)。
 
 ## 1.0.6：API Key 跨版本保留（2026-09-18）
 

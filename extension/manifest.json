@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GPT 网页翻译（DeepSeek 本机版）",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "通过仅监听 127.0.0.1 的本机服务，将外语网页自动翻译为简体中文或双语。",
   "permissions": [
     "storage"

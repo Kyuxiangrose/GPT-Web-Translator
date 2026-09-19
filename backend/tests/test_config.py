@@ -48,6 +48,17 @@ class ConfigFileTests(unittest.TestCase):
 
             self.assertEqual(loaded.api_key, "legacy-key-12345")
 
+    def test_legacy_flash_model_name_is_upgraded_automatically(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / "legacy-model.env"
+            env_file.write_text(
+                "DEEPSEEK_API_KEY=test-key-12345\nDEEPSEEK_MODEL=deepseek-v4-flash\n",
+                encoding="utf-8",
+            )
+            with patch.dict("os.environ", {}, clear=True):
+                loaded = config.load_config(env_file)
+            self.assertEqual(loaded.model, "deepseek-flash")
+
 
 if __name__ == "__main__":
     unittest.main()

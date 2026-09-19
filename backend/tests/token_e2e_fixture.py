@@ -38,10 +38,29 @@ class MockResponse:
         }).encode()
 
 
+class MockBalanceResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self, _limit):
+        return json.dumps({
+            "is_available": True,
+            "balance_infos": [{
+                "currency": "CNY", "total_balance": "88.88",
+                "granted_balance": "8.88", "topped_up_balance": "80.00",
+            }],
+        }).encode()
+
+
 def fake_urlopen(request, timeout):
-    if request.full_url != "https://api.deepseek.com/chat/completions":
-        raise RuntimeError("Unexpected upstream destination")
-    return MockResponse(request)
+    if request.full_url == "https://api.deepseek.com/chat/completions":
+        return MockResponse(request)
+    if request.full_url == "https://api.deepseek.com/user/balance":
+        return MockBalanceResponse()
+    raise RuntimeError("Unexpected upstream destination")
 
 
 class FixtureHandler(RequestHandler):

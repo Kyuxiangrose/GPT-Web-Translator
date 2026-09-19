@@ -17,6 +17,10 @@ USER_CONFIG_DIR = Path(
 ) / "GPT-Web-Translator"
 DEFAULT_ENV_FILE = USER_CONFIG_DIR / ".env"
 LEGACY_ENV_FILE = PROJECT_DIR / ".env"
+LEGACY_MODEL_ALIASES = {
+    "deepseek-v4-flash": "deepseek-flash",
+    "deepseek-v4-flash-vision-exp": "deepseek-flash",
+}
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
@@ -59,7 +63,7 @@ def _as_float(value: str | None, default: float, minimum: float, maximum: float)
 class Config:
     api_key: str
     api_base: str = "https://api.deepseek.com"
-    model: str = "deepseek-v4-flash"
+    model: str = "deepseek-flash"
     host: str = "127.0.0.1"
     port: int = 8765
     timeout_seconds: int = 60
@@ -78,6 +82,10 @@ class Config:
     @property
     def chat_completions_url(self) -> str:
         return f"{self.api_base.rstrip('/')}/chat/completions"
+
+    @property
+    def balance_url(self) -> str:
+        return f"{self.api_base.rstrip('/')}/user/balance"
 
     def validate(self) -> None:
         parsed = urlparse(self.api_base)
@@ -103,10 +111,11 @@ def load_config(env_file: Path | None = None) -> Config:
     def get(name: str, default: str | None = None) -> str | None:
         return os.environ.get(name, file_values.get(name, default))
 
+    configured_model = (get("DEEPSEEK_MODEL", "deepseek-flash") or "").strip()
     config = Config(
         api_key=(get("DEEPSEEK_API_KEY", "") or "").strip(),
         api_base=(get("DEEPSEEK_API_BASE", "https://api.deepseek.com") or "").strip(),
-        model=(get("DEEPSEEK_MODEL", "deepseek-v4-flash") or "").strip(),
+        model=LEGACY_MODEL_ALIASES.get(configured_model.lower(), configured_model),
         port=_as_int(get("GWT_PORT"), 8765, 1024, 65535),
         timeout_seconds=_as_int(get("GWT_TIMEOUT_SECONDS"), 60, 10, 180),
         max_concurrency=_as_int(get("GWT_MAX_CONCURRENCY"), 2, 1, 8),

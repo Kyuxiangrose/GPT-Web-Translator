@@ -23,7 +23,7 @@ from server import validate_translation_payload
 
 
 class APIResponse:
-    def __init__(self, content=None, usage=None, on_read=None, model="deepseek-v4-flash", created=1789142400):
+    def __init__(self, content=None, usage=None, on_read=None, model="deepseek-flash", created=1789142400):
         self.content = content or json.dumps({"translations": [
             {"id": "s1", "text": "你好"}, {"id": "s2", "text": "了解更多"}]})
         self.usage = {
@@ -76,9 +76,9 @@ class TokenUsageTests(unittest.TestCase):
             "prompt_tokens": 300, "completion_tokens": 50, "total_tokens": 350,
             "prompt_cache_hit_tokens": 100, "prompt_cache_miss_tokens": 200,
         }
-        # 2026-09-12 00:00 UTC is off-peak; 02:00 UTC is Beijing peak.
-        off_time = datetime(2026, 9, 12, 0, tzinfo=timezone.utc).timestamp()
-        peak_time = datetime(2026, 9, 12, 2, tzinfo=timezone.utc).timestamp()
+        # 2026-09-14 is Monday: 08:00 Beijing is off-peak; 10:00 is peak.
+        off_time = datetime(2026, 9, 14, 0, tzinfo=timezone.utc).timestamp()
+        peak_time = datetime(2026, 9, 14, 2, tzinfo=timezone.utc).timestamp()
         off_peak, off_version = calculate_cost_nano_yuan(
             usage, "deepseek-v4-flash", off_time
         )
@@ -88,8 +88,8 @@ class TokenUsageTests(unittest.TestCase):
         pro, _ = calculate_cost_nano_yuan(
             usage, "deepseek-v4-pro", off_time
         )
-        self.assertEqual(off_peak, 530000)
-        self.assertEqual(peak, 1060000)
+        self.assertEqual(off_peak, 402000)
+        self.assertEqual(peak, 804000)
         self.assertEqual(pro, 1590000)
         self.assertTrue(off_version.endswith(":off_peak"))
         self.assertTrue(peak_version.endswith(":peak"))
@@ -97,7 +97,13 @@ class TokenUsageTests(unittest.TestCase):
             usage, "deepseek-flash", off_time
         )
         self.assertEqual(alias, off_peak)
-        self.assertIn(":deepseek-v4-flash:", alias_version)
+        self.assertIn(":deepseek-flash:", alias_version)
+        weekend_time = datetime(2026, 9, 12, 2, tzinfo=timezone.utc).timestamp()
+        weekend, weekend_version = calculate_cost_nano_yuan(
+            usage, "deepseek-flash", weekend_time
+        )
+        self.assertEqual(weekend, off_peak)
+        self.assertTrue(weekend_version.endswith(":off_peak"))
 
     def test_invalid_cost_inputs_are_not_guessed(self):
         base = {
@@ -255,7 +261,7 @@ class TokenUsageTests(unittest.TestCase):
         self.assertEqual(migrated["history_missing_cost"], 1)
         self.assertEqual(migrated["page_missing_cost"], 1)
 
-    def test_v104_known_response_alias_is_backfilled_once(self):
+    def test_saved_known_response_is_repriced_once(self):
         old_path = Path(self.temp.name) / "alias.sqlite3"
         db = sqlite3.connect(old_path)
         try:
@@ -263,11 +269,11 @@ class TokenUsageTests(unittest.TestCase):
                 singleton INTEGER PRIMARY KEY, store_id TEXT, revision INTEGER,
                 total_tokens INTEGER, missing_usage INTEGER, started_at INTEGER,
                 total_cost_nano_yuan INTEGER, missing_cost INTEGER)""")
-            db.execute("INSERT INTO token_history VALUES (1, 'old', 1, 350, 0, 1, 0, 1)")
+            db.execute("INSERT INTO token_history VALUES (1, 'old', 1, 350, 0, 1, 530000, 0)")
             db.execute("""CREATE TABLE token_pages (
                 page_id TEXT PRIMARY KEY, total_tokens INTEGER, missing_usage INTEGER,
                 total_cost_nano_yuan INTEGER, missing_cost INTEGER)""")
-            db.execute("INSERT INTO token_pages VALUES ('gwt_alias_page', 350, 0, 0, 1)")
+            db.execute("INSERT INTO token_pages VALUES ('gwt_alias_page', 350, 0, 530000, 0)")
             db.execute("""CREATE TABLE token_events (
                 event_id TEXT PRIMARY KEY, page_id TEXT, total_tokens INTEGER,
                 recorded_at INTEGER, cost_nano_yuan INTEGER, pricing_version TEXT,
@@ -275,14 +281,15 @@ class TokenUsageTests(unittest.TestCase):
                 prompt_cache_miss_tokens INTEGER, completion_tokens INTEGER)""")
             db.execute("""INSERT INTO token_events VALUES (
                 'alias-event', 'gwt_alias_page', 350, 1789171200,
-                NULL, NULL, 'deepseek-flash', 100, 200, 50)""")
+                530000, 'deepseek-cn-2026-08-17:deepseek-v4-flash:off_peak',
+                'deepseek-v4-flash', 100, 200, 50)""")
             db.commit()
         finally:
             db.close()
         first = TokenUsageStore(old_path).snapshot("gwt_alias_page")
         second = TokenUsageStore(old_path).snapshot("gwt_alias_page")
-        self.assertEqual(first["history_total_cost_nano_yuan"], 530000)
-        self.assertEqual(first["page_total_cost_nano_yuan"], 530000)
+        self.assertEqual(first["history_total_cost_nano_yuan"], 402000)
+        self.assertEqual(first["page_total_cost_nano_yuan"], 402000)
         self.assertEqual(first["history_missing_cost"], 0)
         self.assertEqual(first, second)
 

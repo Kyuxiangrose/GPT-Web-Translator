@@ -106,3 +106,21 @@ test("mirror failure does not invalidate a successful translation", async () => 
   const result = await w.send({ type: "GWT_TRANSLATE_BATCH", payload: { session_id: "gwt_test_session" } });
   assert.equal(result.ok, true);
 });
+
+test("official account balance is returned separately from local usage", async () => {
+  const w = worker();
+  w.context.fetch = async (_url, options) => {
+    assert.equal(options.method, "POST");
+    return { ok: true, json: async () => ({
+      ok: true,
+      account_balance: {
+        is_available: true,
+        balance_infos: [{ currency: "CNY", total_balance: "9.99" }]
+      }
+    }) };
+  };
+  const result = await w.send({ type: "GWT_GET_ACCOUNT_BALANCE" });
+  assert.equal(result.ok, true);
+  assert.equal(result.balance.balance_infos[0].total_balance, "9.99");
+  assert.equal(w.storage.gwtTokenStats, undefined);
+});
